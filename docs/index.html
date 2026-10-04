@@ -4,55 +4,76 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Retail KPI Dashboard</title>
+<meta name="description" content="Interactive sales dashboard for a UK online gift retailer, Dec 2009 to Dec 2011: revenue, orders, customers, average order value, repeat rate and returns by country and year.">
+<meta property="og:title" content="Retail KPI Dashboard">
+<meta property="og:description" content="Revenue, orders, customers and returns for a UK online retailer, filterable by country and year. SQL (DuckDB) behind a static page.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f5fb3'/%3E%3Crect x='6' y='16' width='5' height='10' rx='1' fill='white'/%3E%3Crect x='13.5' y='10' width='5' height='16' rx='1' fill='white'/%3E%3Crect x='21' y='5' width='5' height='21' rx='1' fill='white'/%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-  :root { --bg:#f6f7f9; --card:#fff; --ink:#1c2230; --muted:#667085; --line:#e4e7ec; --accent:#2f5fb3; --accent2:#9db8e0; --bad:#b4472f; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#12151b; --card:#1b2029; --ink:#e8ebf1; --muted:#98a2b3; --line:#2c3340; --accent:#6f9be0; --accent2:#33507f; --bad:#e08b73; } }
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1c2230; --muted:#667085; --line:#e4e7ec; --accent:#2f5fb3; --accent2:#9db8e0; --good:#1f7a4d; --bad:#b4472f; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#12151b; --card:#1b2029; --ink:#e8ebf1; --muted:#98a2b3; --line:#2c3340; --accent:#6f9be0; --accent2:#33507f; --good:#5cc08f; --bad:#e08b73; } }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif; }
   main { max-width:1120px; margin:0 auto; padding:24px 16px 48px; }
-  h1 { font-size:22px; margin:0 0 2px; letter-spacing:-.2px; } .sub { color:var(--muted); margin:0 0 18px; font-size:13px; }
-  .filters { display:flex; flex-wrap:wrap; gap:12px 20px; align-items:center; margin-bottom:16px; }
-  .filters label { font-size:12px; color:var(--muted); display:block; margin-bottom:3px; }
-  select, .seg button { font:inherit; color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:8px; padding:6px 10px; }
-  .seg { display:flex; } .seg button { border-radius:0; margin-left:-1px; cursor:pointer; } .seg button:first-child { border-radius:8px 0 0 8px; margin-left:0; } .seg button:last-child { border-radius:0 8px 8px 0; }
-  .seg button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
-  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:16px; }
+  .skip { position:absolute; left:-999px; } .skip:focus { left:16px; top:8px; background:var(--card); padding:6px 10px; border-radius:6px; z-index:5; }
+  h1 { font-size:22px; margin:0 0 2px; letter-spacing:-.2px; } .sub { color:var(--muted); margin:0 0 18px; font-size:13px; max-width:70ch; }
+  .filters { display:flex; flex-wrap:wrap; gap:12px 20px; align-items:flex-end; margin-bottom:16px; }
+  .filters label, .filters .lbl { font-size:12px; color:var(--muted); display:block; margin-bottom:3px; }
+  select, button { font:inherit; color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:8px; padding:6px 10px; }
+  button { cursor:pointer; } :is(select,button,a):focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .seg { display:flex; } .seg button { border-radius:0; margin-left:-1px; } .seg button:first-child { border-radius:8px 0 0 8px; margin-left:0; } .seg button:last-child { border-radius:0 8px 8px 0; }
+  .seg button[aria-pressed="true"] { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .spacer { flex:1; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(165px,1fr)); gap:12px; margin-bottom:12px; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
   .kpi .v { font-size:24px; font-weight:650; letter-spacing:-.4px; } .kpi .l { font-size:12px; color:var(--muted); } .kpi .n { font-size:11px; color:var(--muted); margin-top:4px; }
+  .delta { font-size:12px; font-weight:600; margin-top:2px; } .delta.up { color:var(--good); } .delta.down { color:var(--bad); } .delta small { font-weight:400; color:var(--muted); }
+  .insights { margin-bottom:12px; } .insights ul { margin:6px 0 0; padding-left:18px; } .insights li { margin:2px 0; }
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; } .wide { grid-column:1/-1; }
-  @media (max-width:760px) { .grid { grid-template-columns:1fr; } }
+  @media (max-width:760px) { .grid { grid-template-columns:1fr; } .spacer { display:none; } }
   h2 { font-size:14px; margin:0 0 10px; } .chart { position:relative; height:260px; }
-  table { width:100%; border-collapse:collapse; font-size:13px; } th { text-align:left; color:var(--muted); font-weight:500; font-size:12px; }
+  .table-wrap { overflow-x:auto; } table { width:100%; border-collapse:collapse; font-size:13px; } th { text-align:left; color:var(--muted); font-weight:500; font-size:12px; }
   td, th { padding:6px 4px; border-bottom:1px solid var(--line); } td.r, th.r { text-align:right; font-variant-numeric:tabular-nums; }
-  .foot { color:var(--muted); font-size:12px; margin-top:16px; } a { color:var(--accent); }
+  .foot { color:var(--muted); font-size:12px; margin-top:16px; max-width:90ch; } a { color:var(--accent); }
+  #status { color:var(--muted); padding:40px 0; text-align:center; }
+  @media print { body { background:#fff; } .filters button, .filters select { display:none; } .card { break-inside:avoid; } }
 </style>
 </head>
 <body>
+<a class="skip" href="#kpis">Skip to the numbers</a>
 <main>
   <h1>Retail KPI Dashboard</h1>
-  <p class="sub">Revenue, orders, customers and returns for a UK online gift retailer, Dec 2009 to Dec 2011. Public data: UCI Online Retail II.</p>
-  <div class="filters">
+  <p class="sub">Revenue, orders, customers and returns for a UK online gift retailer, Dec 2009 to Dec 2011. Public data: UCI Online Retail II. KPI logic is written in SQL (DuckDB); this page reads the pre-aggregated result.</p>
+  <div class="filters" role="group" aria-label="Filters">
     <div><label for="country">Country</label><select id="country"></select></div>
-    <div><label>Year</label><div class="seg" id="year"></div></div>
+    <div><span class="lbl" id="year-lbl">Year</span><div class="seg" id="year" role="group" aria-labelledby="year-lbl"></div></div>
+    <div class="spacer"></div>
+    <button id="csv" type="button" title="Download the monthly figures for the current filter">Download monthly CSV</button>
   </div>
-  <section class="kpis" id="kpis"></section>
+  <div id="status" role="status">Loading data...</div>
+  <section class="kpis" id="kpis" aria-label="Key figures"></section>
+  <section class="card insights" id="insights" aria-label="What stands out" hidden></section>
   <div class="grid">
-    <div class="card wide"><h2 id="t-month">Monthly revenue</h2><div class="chart"><canvas id="c-month"></canvas></div></div>
-    <div class="card"><h2>Orders and average order value</h2><div class="chart"><canvas id="c-aov"></canvas></div></div>
-    <div class="card"><h2>Revenue by country</h2><div class="chart"><canvas id="c-country"></canvas></div></div>
-    <div class="card"><h2>Top 10 products by revenue</h2><table id="t-prod"></table></div>
-    <div class="card"><h2>Top 10 customers by revenue</h2><table id="t-cust"></table></div>
+    <div class="card wide"><h2 id="t-month">Monthly revenue</h2><div class="chart"><canvas id="c-month" role="img" aria-label="Bar chart of monthly revenue"></canvas></div></div>
+    <div class="card"><h2>Orders and average order value</h2><div class="chart"><canvas id="c-aov" role="img" aria-label="Monthly orders as bars and average order value as a line"></canvas></div></div>
+    <div class="card"><h2>Revenue by country</h2><div class="chart"><canvas id="c-country" role="img" aria-label="Revenue by country"></canvas></div></div>
+    <div class="card"><h2>Top 10 products by revenue</h2><div class="table-wrap"><table id="t-prod"></table></div></div>
+    <div class="card"><h2>Top 10 customers by revenue</h2><div class="table-wrap"><table id="t-cust"></table></div></div>
   </div>
   <p class="foot" id="foot"></p>
+  <p class="foot">Built by <a href="https://github.com/MaHmOuDeB">Mahmoud El Bergui</a> &middot; <a href="https://github.com/MaHmOuDeB/retail-kpi-dashboard">source and SQL</a> &middot; Data: Chen, D. (2012), UCI Machine Learning Repository, CC BY 4.0.</p>
 </main>
 <script>
 const fmt = (n, d=0) => n.toLocaleString("en-GB", {maximumFractionDigits:d});
 const gbp = n => "£" + (n >= 1e6 ? fmt(n/1e6, 2) + "M" : n >= 1e4 ? fmt(n/1e3, 0) + "k" : fmt(n));
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const monthName = ym => MONTHS[+ym.slice(5) - 1] + " " + ym.slice(0, 4);
 let D, state = {country:"All", year:"All"}, charts = {};
 
-fetch("data.json").then(r => r.json()).then(d => { D = d; init(); render(); });
+fetch("data.json").then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(d => { D = d; document.getElementById("status").hidden = true; init(); render(); })
+  .catch(() => { document.getElementById("status").textContent = "The data file could not be loaded. Serve this folder over HTTP (for example: python -m http.server -d docs) and reload."; });
 
 function init() {
   const sel = document.getElementById("country");
@@ -60,47 +81,98 @@ function init() {
   sel.onchange = () => { state.country = sel.value; render(); };
   const yr = document.getElementById("year");
   [["All","All years"],["2010","2010"],["2011","2011"]].forEach(([v, t]) => {
-    const b = document.createElement("button"); b.textContent = t; b.dataset.v = v;
+    const b = document.createElement("button"); b.type = "button"; b.textContent = t; b.dataset.v = v;
     b.onclick = () => { state.year = v; render(); }; yr.appendChild(b);
   });
-  document.getElementById("foot").textContent = D.meta.note + " Customers are counted once per period; the repeat rate is the share of customers with more than one order in the period. Returns are cancelled invoices, shown as a share of sales value. No cost data is available, so there is no margin view.";
+  document.getElementById("csv").onclick = downloadCsv;
+  document.getElementById("foot").textContent = D.meta.note + " Customers are counted once per period; the repeat rate is the share of customers with more than one order in the period. Returns are cancelled invoices, shown as a share of sales value. About 23% of invoice lines have no customer ID and are excluded. There is no cost data, so there is no margin view.";
+}
+
+const inYear = (r, year) => year === "All" || r.ym.startsWith(year);
+const rowsFor = (country, year) => D.monthly.filter(r => r.country === country && inYear(r, year));
+const total = (rows, k) => rows.reduce((a, r) => a + r[k], 0);
+
+function delta(cur, prev, pp) {
+  if (!prev) return "";
+  const d = pp ? (cur - prev) : (cur / prev - 1) * 100;
+  if (Math.abs(d) < 0.05) return `<div class="delta">&#9644; flat <small>vs Jan–Nov 2010</small></div>`;
+  const up = d >= 0;
+  return `<div class="delta ${up ? "up" : "down"}">${up ? "▲" : "▼"} ${fmt(Math.abs(d), 1)}${pp ? " pp" : "%"} <small>vs Jan–Nov 2010</small></div>`;
 }
 
 function render() {
-  document.querySelectorAll("#year button").forEach(b => b.classList.toggle("on", b.dataset.v === state.year));
-  const inYear = r => state.year === "All" || r.ym.startsWith(state.year);
-  const rows = D.monthly.filter(r => r.country === state.country && inYear(r));
-  const sum = k => rows.reduce((a, r) => a + r[k], 0);
-  const rev = sum("revenue"), ord = sum("orders"), ret = sum("returns");
+  document.querySelectorAll("#year button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === state.year));
+  const rows = rowsFor(state.country, state.year);
+  const rev = total(rows, "revenue"), ord = total(rows, "orders"), ret = total(rows, "returns");
   const y = D.yearly.find(r => r.yr === state.year && r.country === state.country) || {customers:0, repeat_rate:0};
+  // Year-on-year: only for 2011, on the months both years have in full (Jan to Nov)
+  let dRev = "", dOrd = "", dAov = "", dRet = "";
+  if (state.year === "2011") {
+    const cmp = yr => D.monthly.filter(r => r.country === state.country && r.ym >= yr + "-01" && r.ym <= yr + "-11");
+    const a = cmp("2011"), b = cmp("2010");
+    const aR = total(a, "revenue"), bR = total(b, "revenue"), aO = total(a, "orders"), bO = total(b, "orders");
+    dRev = delta(aR, bR); dOrd = delta(aO, bO);
+    dAov = bO && aO ? delta(aR / aO, bR / bO) : "";
+    dRet = bR && aR ? delta(total(a, "returns") / aR * 100, total(b, "returns") / bR * 100, true) : "";
+  }
   const kp = [
-    ["Revenue", gbp(rev), "Product sales, excluding postage and fees"],
-    ["Orders", fmt(ord), "Distinct invoices"],
-    ["Customers", fmt(y.customers), "Registered customers who ordered"],
-    ["Average order value", "£" + fmt(ord ? rev / ord : 0), "Revenue per order"],
-    ["Repeat customers", fmt(y.repeat_rate * 100, 0) + "%", "More than one order in the period"],
-    ["Return rate", fmt(rev ? ret / rev * 100 : 0, 1) + "%", "Cancelled value / sales value"],
+    ["Revenue", gbp(rev), "Product sales, excluding postage and fees", dRev],
+    ["Orders", fmt(ord), "Distinct invoices", dOrd],
+    ["Customers", fmt(y.customers), "Registered customers who ordered", ""],
+    ["Average order value", "£" + fmt(ord ? rev / ord : 0), "Revenue per order", dAov],
+    ["Repeat customers", fmt(y.repeat_rate * 100, 0) + "%", "More than one order in the period", ""],
+    ["Return rate", fmt(rev ? ret / rev * 100 : 0, 1) + "%", rows.some(r => r.ym === "2011-12") ? "Cancelled / sales value. Includes Dec 2011 (9 days of data, 34% returns)" : "Cancelled value / sales value", dRet],
   ];
-  document.getElementById("kpis").innerHTML = kp.map(([l, v, n]) => `<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="n">${n}</div></div>`).join("");
+  document.getElementById("kpis").innerHTML = kp.map(([l, v, n, dl]) => `<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div>${dl}<div class="n">${n}</div></div>`).join("");
   document.getElementById("t-month").textContent = "Monthly revenue: " + (state.country === "All" ? "all countries" : state.country);
 
-  draw("c-month", {type:"bar", data:{labels:rows.map(r => r.ym), datasets:[{label:"Revenue (£)", data:rows.map(r => r.revenue), backgroundColor:css("--accent")}]},
-    options:opts(v => gbp(v))});
-  draw("c-aov", {data:{labels:rows.map(r => r.ym), datasets:[
+  insights(rows, rev);
+  const labels = rows.map(r => monthName(r.ym));
+  draw("c-month", {type:"bar", data:{labels, datasets:[{label:"Revenue", data:rows.map(r => r.revenue), backgroundColor:css("--accent")}]},
+    options:opts(v => gbp(v), v => "£" + fmt(v))});
+  draw("c-aov", {data:{labels, datasets:[
       {type:"bar", label:"Orders", data:rows.map(r => r.orders), backgroundColor:css("--accent2"), yAxisID:"y"},
-      {type:"line", label:"Average order value (£)", data:rows.map(r => r.orders ? r.revenue / r.orders : null), borderColor:css("--accent"), backgroundColor:css("--accent"), pointRadius:2, yAxisID:"y1"}]},
-    options:{...opts(v => fmt(v)), scales:{x:{ticks:{maxTicksLimit:8}, grid:{display:false}}, y:{position:"left", min:0, grid:{color:css("--line")}}, y1:{position:"right", min:0, grid:{drawOnChartArea:false}, ticks:{callback:v => "£" + v}}}}});
-  const byC = D.countries.filter(c => c !== "All").map(c => [c, D.monthly.filter(r => r.country === c && inYear(r)).reduce((a, r) => a + r.revenue, 0)]).sort((a, b) => b[1] - a[1]);
-  draw("c-country", {type:"bar", data:{labels:byC.map(x => x[0]), datasets:[{label:"Revenue (£)", data:byC.map(x => x[1]),
+      {type:"line", label:"Average order value", data:rows.map(r => r.orders ? r.revenue / r.orders : null), borderColor:css("--accent"), backgroundColor:css("--accent"), pointRadius:2, yAxisID:"y1"}]},
+    options:{...opts(v => fmt(v)), plugins:{legend:{display:true, labels:{boxWidth:10}}, tooltip:{callbacks:{label:c => c.dataset.label + ": " + (c.dataset.yAxisID === "y1" ? "£" + fmt(c.parsed.y) : fmt(c.parsed.y))}}},
+      scales:{x:{ticks:{maxTicksLimit:6}, grid:{display:false}}, y:{position:"left", min:0, grid:{color:css("--line")}}, y1:{position:"right", min:0, grid:{drawOnChartArea:false}, ticks:{callback:v => "£" + v}}}}});
+  const byC = D.countries.filter(c => c !== "All").map(c => [c, total(rowsFor(c, state.year), "revenue")]).sort((a, b) => b[1] - a[1]);
+  draw("c-country", {type:"bar", data:{labels:byC.map(x => x[0]), datasets:[{label:"Revenue", data:byC.map(x => x[1]),
       backgroundColor:byC.map(x => state.country === "All" || x[0] === state.country ? css("--accent") : css("--accent2"))}]},
-    options:{...opts(v => gbp(v)), indexAxis:"y", scales:{x:{ticks:{callback:v => gbp(v), maxTicksLimit:5}, grid:{color:css("--line")}}, y:{grid:{display:false}}}}});
+    options:{...opts(v => gbp(v), v => "£" + fmt(v)), indexAxis:"y", scales:{x:{ticks:{callback:v => gbp(v), maxTicksLimit:5}, grid:{color:css("--line")}}, y:{grid:{display:false}}}}});
   const tp = D.top_products.filter(r => r.yr === state.year && r.country === state.country);
-  document.getElementById("t-prod").innerHTML = "<tr><th>Product</th><th class='r'>Units</th><th class='r'>Revenue</th></tr>" + tp.map(r => `<tr><td>${(r.description || r.stock_code).toLowerCase().replace(/^./, c => c.toUpperCase())}</td><td class="r">${fmt(r.units)}</td><td class="r">£${fmt(r.revenue)}</td></tr>`).join("");
+  document.getElementById("t-prod").innerHTML = "<tr><th>Product</th><th class='r'>Units</th><th class='r'>Revenue</th></tr>" + tp.map(r => `<tr><td>${esc((r.description || r.stock_code).toLowerCase().replace(/^./, c => c.toUpperCase()))}</td><td class="r">${fmt(r.units)}</td><td class="r">£${fmt(r.revenue)}</td></tr>`).join("");
   const tc = D.top_customers.filter(r => r.yr === state.year && r.country === state.country);
   document.getElementById("t-cust").innerHTML = "<tr><th>Customer ID</th><th class='r'>Revenue</th><th class='r'>Share</th></tr>" + tc.map(r => `<tr><td>${r.customer_id}</td><td class="r">£${fmt(r.revenue)}</td><td class="r">${fmt(r.share * 100, 1)}%</td></tr>`).join("");
 }
 
-function opts(tick) { return {responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{ticks:{maxTicksLimit:8}, grid:{display:false}}, y:{ticks:{callback:tick}, grid:{color:css("--line")}}}}; }
+function insights(rows, rev) {
+  const el = document.getElementById("insights"), out = [];
+  if (rows.length) {
+    const peak = rows.reduce((a, r) => r.revenue > a.revenue ? r : a);
+    out.push(`Best month: <b>${monthName(peak.ym)}</b> with ${gbp(peak.revenue)}.`);
+  }
+  if (state.country === "All" && rev) {
+    const uk = total(rowsFor("United Kingdom", state.year), "revenue");
+    out.push(`The United Kingdom is <b>${fmt(uk / rev * 100, 0)}%</b> of revenue.`);
+  }
+  const tc = D.top_customers.filter(r => r.yr === state.year && r.country === state.country);
+  if (tc.length) out.push(`The 10 biggest customers account for <b>${fmt(tc.reduce((a, r) => a + r.share, 0) * 100, 0)}%</b> of revenue.`);
+  el.hidden = !out.length;
+  el.innerHTML = out.length ? "<h2>What stands out</h2><ul>" + out.map(o => `<li>${o}</li>`).join("") + "</ul>" : "";
+}
+
+function downloadCsv() {
+  const rows = rowsFor(state.country, state.year);
+  const csv = ["month,country,revenue_gbp,orders,customers,units,returns_gbp"].concat(rows.map(r => [r.ym, r.country, r.revenue, r.orders, r.customers, r.units, r.returns].join(","))).join("\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], {type:"text/csv"}));
+  a.download = `monthly_${state.country.replace(/\W+/g, "_")}_${state.year}.csv`; a.click(); URL.revokeObjectURL(a.href);
+}
+
+const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function opts(tick, tip) {
+  return {responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, tooltip:{callbacks:{label:c => c.dataset.label + ": " + (tip ? tip(c.parsed.y ?? c.parsed.x) : fmt(c.parsed.y ?? c.parsed.x))}}},
+          scales:{x:{ticks:{maxTicksLimit:6}, grid:{display:false}}, y:{ticks:{callback:tick}, grid:{color:css("--line")}}}};
+}
 function draw(id, cfg) {
   if (charts[id]) charts[id].destroy();
   Chart.defaults.color = css("--muted"); Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;

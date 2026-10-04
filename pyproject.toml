@@ -1,0 +1,19 @@
+[project]
+name = "retail-kpi-dashboard"
+version = "1.0.0"
+description = "Interactive sales KPI dashboard on UCI Online Retail II: SQL (DuckDB) models behind a static web page"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Mahmoud El Bergui" }]
+
+[tool.ruff]
+line-length = 150
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501", "E731"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

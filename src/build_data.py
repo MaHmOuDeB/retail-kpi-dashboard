@@ -1,6 +1,9 @@
 """Run the SQL and write docs/data.json for the static dashboard.  python src/build_data.py [path/to/online_retail_ii.parquet]"""
-import json, os, sys
+import json
+import os
+import sys
 from pathlib import Path
+
 import duckdb
 
 ROOT = Path(__file__).resolve().parent.parent
