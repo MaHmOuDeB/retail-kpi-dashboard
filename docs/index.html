@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Retail KPI Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1c2230; --muted:#667085; --line:#e4e7ec; --accent:#2f5fb3; --accent2:#9db8e0; --bad:#b4472f; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#12151b; --card:#1b2029; --ink:#e8ebf1; --muted:#98a2b3; --line:#2c3340; --accent:#6f9be0; --accent2:#33507f; --bad:#e08b73; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif; }
+  main { max-width:1120px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:22px; margin:0 0 2px; letter-spacing:-.2px; } .sub { color:var(--muted); margin:0 0 18px; font-size:13px; }
+  .filters { display:flex; flex-wrap:wrap; gap:12px 20px; align-items:center; margin-bottom:16px; }
+  .filters label { font-size:12px; color:var(--muted); display:block; margin-bottom:3px; }
+  select, .seg button { font:inherit; color:var(--ink); background:var(--card); border:1px solid var(--line); border-radius:8px; padding:6px 10px; }
+  .seg { display:flex; } .seg button { border-radius:0; margin-left:-1px; cursor:pointer; } .seg button:first-child { border-radius:8px 0 0 8px; margin-left:0; } .seg button:last-child { border-radius:0 8px 8px 0; }
+  .seg button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .kpi .v { font-size:24px; font-weight:650; letter-spacing:-.4px; } .kpi .l { font-size:12px; color:var(--muted); } .kpi .n { font-size:11px; color:var(--muted); margin-top:4px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; } .wide { grid-column:1/-1; }
+  @media (max-width:760px) { .grid { grid-template-columns:1fr; } }
+  h2 { font-size:14px; margin:0 0 10px; } .chart { position:relative; height:260px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; } th { text-align:left; color:var(--muted); font-weight:500; font-size:12px; }
+  td, th { padding:6px 4px; border-bottom:1px solid var(--line); } td.r, th.r { text-align:right; font-variant-numeric:tabular-nums; }
+  .foot { color:var(--muted); font-size:12px; margin-top:16px; } a { color:var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Retail KPI Dashboard</h1>
+  <p class="sub">Revenue, orders, customers and returns for a UK online gift retailer, Dec 2009 to Dec 2011. Public data: UCI Online Retail II.</p>
+  <div class="filters">
+    <div><label for="country">Country</label><select id="country"></select></div>
+    <div><label>Year</label><div class="seg" id="year"></div></div>
+  </div>
+  <section class="kpis" id="kpis"></section>
+  <div class="grid">
+    <div class="card wide"><h2 id="t-month">Monthly revenue</h2><div class="chart"><canvas id="c-month"></canvas></div></div>
+    <div class="card"><h2>Orders and average order value</h2><div class="chart"><canvas id="c-aov"></canvas></div></div>
+    <div class="card"><h2>Revenue by country</h2><div class="chart"><canvas id="c-country"></canvas></div></div>
+    <div class="card"><h2>Top 10 products by revenue</h2><table id="t-prod"></table></div>
+    <div class="card"><h2>Top 10 customers by revenue</h2><table id="t-cust"></table></div>
+  </div>
+  <p class="foot" id="foot"></p>
+</main>
+<script>
+const fmt = (n, d=0) => n.toLocaleString("en-GB", {maximumFractionDigits:d});
+const gbp = n => "£" + (n >= 1e6 ? fmt(n/1e6, 2) + "M" : n >= 1e4 ? fmt(n/1e3, 0) + "k" : fmt(n));
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let D, state = {country:"All", year:"All"}, charts = {};
+
+fetch("data.json").then(r => r.json()).then(d => { D = d; init(); render(); });
+
+function init() {
+  const sel = document.getElementById("country");
+  D.countries.forEach(c => sel.add(new Option(c === "All" ? "All countries" : c, c)));
+  sel.onchange = () => { state.country = sel.value; render(); };
+  const yr = document.getElementById("year");
+  [["All","All years"],["2010","2010"],["2011","2011"]].forEach(([v, t]) => {
+    const b = document.createElement("button"); b.textContent = t; b.dataset.v = v;
+    b.onclick = () => { state.year = v; render(); }; yr.appendChild(b);
+  });
+  document.getElementById("foot").textContent = D.meta.note + " Customers are counted once per period; the repeat rate is the share of customers with more than one order in the period. Returns are cancelled invoices, shown as a share of sales value. No cost data is available, so there is no margin view.";
+}
+
+function render() {
+  document.querySelectorAll("#year button").forEach(b => b.classList.toggle("on", b.dataset.v === state.year));
+  const inYear = r => state.year === "All" || r.ym.startsWith(state.year);
+  const rows = D.monthly.filter(r => r.country === state.country && inYear(r));
+  const sum = k => rows.reduce((a, r) => a + r[k], 0);
+  const rev = sum("revenue"), ord = sum("orders"), ret = sum("returns");
+  const y = D.yearly.find(r => r.yr === state.year && r.country === state.country) || {customers:0, repeat_rate:0};
+  const kp = [
+    ["Revenue", gbp(rev), "Product sales, excluding postage and fees"],
+    ["Orders", fmt(ord), "Distinct invoices"],
+    ["Customers", fmt(y.customers), "Registered customers who ordered"],
+    ["Average order value", "£" + fmt(ord ? rev / ord : 0), "Revenue per order"],
+    ["Repeat customers", fmt(y.repeat_rate * 100, 0) + "%", "More than one order in the period"],
+    ["Return rate", fmt(rev ? ret / rev * 100 : 0, 1) + "%", "Cancelled value / sales value"],
+  ];
+  document.getElementById("kpis").innerHTML = kp.map(([l, v, n]) => `<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div><div class="n">${n}</div></div>`).join("");
+  document.getElementById("t-month").textContent = "Monthly revenue: " + (state.country === "All" ? "all countries" : state.country);
+
+  draw("c-month", {type:"bar", data:{labels:rows.map(r => r.ym), datasets:[{label:"Revenue (£)", data:rows.map(r => r.revenue), backgroundColor:css("--accent")}]},
+    options:opts(v => gbp(v))});
+  draw("c-aov", {data:{labels:rows.map(r => r.ym), datasets:[
+      {type:"bar", label:"Orders", data:rows.map(r => r.orders), backgroundColor:css("--accent2"), yAxisID:"y"},
+      {type:"line", label:"Average order value (£)", data:rows.map(r => r.orders ? r.revenue / r.orders : null), borderColor:css("--accent"), backgroundColor:css("--accent"), pointRadius:2, yAxisID:"y1"}]},
+    options:{...opts(v => fmt(v)), scales:{x:{ticks:{maxTicksLimit:8}, grid:{display:false}}, y:{position:"left", min:0, grid:{color:css("--line")}}, y1:{position:"right", min:0, grid:{drawOnChartArea:false}, ticks:{callback:v => "£" + v}}}}});
+  const byC = D.countries.filter(c => c !== "All").map(c => [c, D.monthly.filter(r => r.country === c && inYear(r)).reduce((a, r) => a + r.revenue, 0)]).sort((a, b) => b[1] - a[1]);
+  draw("c-country", {type:"bar", data:{labels:byC.map(x => x[0]), datasets:[{label:"Revenue (£)", data:byC.map(x => x[1]),
+      backgroundColor:byC.map(x => state.country === "All" || x[0] === state.country ? css("--accent") : css("--accent2"))}]},
+    options:{...opts(v => gbp(v)), indexAxis:"y", scales:{x:{ticks:{callback:v => gbp(v), maxTicksLimit:5}, grid:{color:css("--line")}}, y:{grid:{display:false}}}}});
+  const tp = D.top_products.filter(r => r.yr === state.year && r.country === state.country);
+  document.getElementById("t-prod").innerHTML = "<tr><th>Product</th><th class='r'>Units</th><th class='r'>Revenue</th></tr>" + tp.map(r => `<tr><td>${(r.description || r.stock_code).toLowerCase().replace(/^./, c => c.toUpperCase())}</td><td class="r">${fmt(r.units)}</td><td class="r">£${fmt(r.revenue)}</td></tr>`).join("");
+  const tc = D.top_customers.filter(r => r.yr === state.year && r.country === state.country);
+  document.getElementById("t-cust").innerHTML = "<tr><th>Customer ID</th><th class='r'>Revenue</th><th class='r'>Share</th></tr>" + tc.map(r => `<tr><td>${r.customer_id}</td><td class="r">£${fmt(r.revenue)}</td><td class="r">${fmt(r.share * 100, 1)}%</td></tr>`).join("");
+}
+
+function opts(tick) { return {responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{x:{ticks:{maxTicksLimit:8}, grid:{display:false}}, y:{ticks:{callback:tick}, grid:{color:css("--line")}}}}; }
+function draw(id, cfg) {
+  if (charts[id]) charts[id].destroy();
+  Chart.defaults.color = css("--muted"); Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+  charts[id] = new Chart(document.getElementById(id), cfg);
+}
+</script>
+</body>
+</html>
