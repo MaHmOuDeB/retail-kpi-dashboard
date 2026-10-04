@@ -43,7 +43,7 @@
 <a class="skip" href="#kpis">Skip to the numbers</a>
 <main>
   <h1>Retail KPI Dashboard</h1>
-  <p class="sub">Revenue, orders, customers and returns for a UK online gift retailer, Dec 2009 to Dec 2011. Public data: UCI Online Retail II. KPI logic is written in SQL (DuckDB); this page reads the pre-aggregated result.</p>
+  <p class="sub">Revenue, orders, customers and returns for a UK online gift retailer, Dec 2009 to Dec 2011. Public data: UCI Online Retail II. Sums and counts are computed in SQL (DuckDB); this page derives the ratios from them.</p>
   <div class="filters" role="group" aria-label="Filters">
     <div><label for="country">Country</label><select id="country"></select></div>
     <div><span class="lbl" id="year-lbl">Year</span><div class="seg" id="year" role="group" aria-labelledby="year-lbl"></div></div>
@@ -68,7 +68,7 @@ const fmt = (n, d=0) => n.toLocaleString("en-GB", {maximumFractionDigits:d});
 const gbp = n => "£" + (n >= 1e6 ? fmt(n/1e6, 2) + "M" : n >= 1e4 ? fmt(n/1e3, 0) + "k" : fmt(n));
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-const monthName = ym => MONTHS[+ym.slice(5) - 1] + " " + ym.slice(0, 4);
+const monthName = ym => MONTHS[+ym.slice(5) - 1] + " " + ym.slice(0, 4) + (ym === "2011-12" ? "*" : "");
 let D, state = {country:"All", year:"All"}, charts = {};
 
 fetch("data.json").then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
@@ -85,7 +85,7 @@ function init() {
     b.onclick = () => { state.year = v; render(); }; yr.appendChild(b);
   });
   document.getElementById("csv").onclick = downloadCsv;
-  document.getElementById("foot").textContent = D.meta.note + " Customers are counted once per period; the repeat rate is the share of customers with more than one order in the period. Returns are cancelled invoices, shown as a share of sales value. About 23% of invoice lines have no customer ID and are excluded. There is no cost data, so there is no margin view.";
+  document.getElementById("foot").textContent = "* December 2011 is a partial month (the data ends on 9 Dec). Customers are counted once per period; the repeat rate is the share of customers with more than one order in the period. Orders cancelled by the same customer for the same item within 24 hours are removed from both revenue and returns. Returns are all other cancellations, shown as a share of sales value. About 23% of invoice lines have no customer ID and are excluded. There is no cost data, so there is no margin view.";
 }
 
 const inYear = (r, year) => year === "All" || r.ym.startsWith(year);
@@ -116,12 +116,12 @@ function render() {
     dRet = bR && aR ? delta(total(a, "returns") / aR * 100, total(b, "returns") / bR * 100, true) : "";
   }
   const kp = [
-    ["Revenue", gbp(rev), "Product sales, excluding postage and fees", dRev],
+    ["Revenue", gbp(rev), "Product sales, net of orders cancelled within 24 hours", dRev],
     ["Orders", fmt(ord), "Distinct invoices", dOrd],
     ["Customers", fmt(y.customers), "Registered customers who ordered", ""],
     ["Average order value", "£" + fmt(ord ? rev / ord : 0), "Revenue per order", dAov],
-    ["Repeat customers", fmt(y.repeat_rate * 100, 0) + "%", "More than one order in the period", ""],
-    ["Return rate", fmt(rev ? ret / rev * 100 : 0, 1) + "%", rows.some(r => r.ym === "2011-12") ? "Cancelled / sales value. Includes Dec 2011 (9 days of data, 34% returns)" : "Cancelled value / sales value", dRet],
+    ["Repeat customers", fmt(y.repeat_rate * 100, 0) + "%", "More than one order in the period; longer periods read higher", ""],
+    ["Return rate", fmt(rev ? ret / rev * 100 : 0, 1) + "%", "Genuine returns / sales value (same-day reversals excluded)", dRet],
   ];
   document.getElementById("kpis").innerHTML = kp.map(([l, v, n, dl]) => `<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div>${dl}<div class="n">${n}</div></div>`).join("");
   document.getElementById("t-month").textContent = "Monthly revenue: " + (state.country === "All" ? "all countries" : state.country);

@@ -19,7 +19,7 @@ def clean(v):
     return round(v, 4) if isinstance(v, float) else v
 out = {
     "meta": {"source": "UCI Online Retail II, 1 Dec 2009 to 9 Dec 2011", "first_month": "2009-12", "last_month": "2011-12",
-             "note": "December 2009 and December 2011 are partial months."},
+             "note": "December 2011 is a partial month (the data ends on 9 Dec)."},
     "monthly": [{k: clean(v) for k, v in r.items()} for r in rows("monthly")],
     "yearly": [{k: clean(v) for k, v in r.items()} for r in rows("yearly")],
     "top_products": [{k: clean(v) for k, v in r.items()} for r in rows("top_products")],

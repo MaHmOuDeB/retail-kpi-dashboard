@@ -8,11 +8,22 @@ SELECT s.*, CASE WHEN s.country IN (SELECT country FROM top_countries) THEN s.co
        strftime(invoice_date, '%Y-%m') AS ym, YEAR(invoice_date) AS yr
 FROM sales s;
 
+-- A customer's main country = the country with the most revenue. Returns carry no country, so they take this one.
+CREATE OR REPLACE TABLE customer_country AS
+SELECT customer_id, ARG_MAX(country_g, revenue) AS country_g
+FROM (SELECT customer_id, country_g, SUM(revenue) AS revenue FROM sales_c GROUP BY customer_id, country_g)
+GROUP BY customer_id;
+
 CREATE OR REPLACE TABLE returns_c AS
 SELECT r.*, strftime(r.return_date, '%Y-%m') AS ym, YEAR(r.return_date) AS yr,
-       COALESCE((SELECT ANY_VALUE(CASE WHEN s.country IN (SELECT country FROM top_countries) THEN s.country ELSE 'Other countries' END)
-                 FROM sales s WHERE s.customer_id = r.customer_id), 'Other countries') AS country_g
-FROM returns r;
+       COALESCE(c.country_g, 'Other countries') AS country_g          -- customers with returns but no sales fall here
+FROM returns r LEFT JOIN customer_country c USING (customer_id);
+
+-- Most common description per product (computed once)
+CREATE OR REPLACE TABLE product_names AS
+SELECT stock_code, ARG_MAX(description, n) AS description
+FROM (SELECT stock_code, description, COUNT(*) AS n FROM raw WHERE description IS NOT NULL GROUP BY stock_code, description)
+GROUP BY stock_code;
 
 -- monthly: one row per (ym, country) incl. 'All'
 CREATE OR REPLACE TABLE monthly AS
@@ -52,10 +63,9 @@ WITH keys AS (
 agg AS (SELECT yr, country, stock_code, SUM(revenue) AS revenue, SUM(quantity) AS units FROM keys GROUP BY ALL),
 ranked AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY yr, country ORDER BY revenue DESC) AS rk FROM agg)
 SELECT r.yr, r.country, r.rk, r.stock_code,
-       (SELECT description FROM raw d WHERE d.stock_code = r.stock_code AND d.description IS NOT NULL
-        GROUP BY description ORDER BY COUNT(*) DESC LIMIT 1) AS description,
+       n.description,
        r.revenue, r.units
-FROM ranked r WHERE rk <= 10 ORDER BY yr, country, rk;
+FROM ranked r LEFT JOIN product_names n USING (stock_code) WHERE rk <= 10 ORDER BY yr, country, rk;
 
 CREATE OR REPLACE TABLE top_customers AS
 WITH keys AS (
