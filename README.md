@@ -27,7 +27,7 @@ in Power BI Desktop on Windows. This version is a web page anyone can open, and 
 A cancellation that undoes an order line for the same customer, product and quantity within 24 hours is treated as an order
 that never happened, and both lines are removed. Without this rule, two orders (£77k in January 2011 and £168k on 9 December
 2011, each cancelled the same day) counted as revenue and again as returns, which made returns look as if they had grown by
-29% and put one cancelled order at the top of the product and customer rankings. The rule is tested on synthetic invoices.
+29% year on year (the cleaned figures grow by about 2%) and put one cancelled order at the top of the product and customer rankings. The rule is tested on synthetic invoices.
 
 ## How it works
 
