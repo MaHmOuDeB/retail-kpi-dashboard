@@ -215,3 +215,37 @@ def test_export_twice_is_byte_identical(tmp_path):
     main(DATA_DIR, second)
     assert first.read_bytes() == second.read_bytes()
     assert first.read_text() == EXPORT_PATH.read_text()
+
+
+def _normalised(data: dict) -> dict:
+    """The dashboard data with row order and tie order removed, everything else compared exactly (floats as stored).
+
+    Lists of objects are sorted by their canonical JSON. The two ranked lists are reduced per (year, country) to rank and revenue, plus the
+    row itself where its revenue is unique in the list and the rank is below 10: equal revenues can be listed in either order, and the one at
+    rank 10 can tie with a product that is not listed at all."""
+    out = {k: v for k, v in data.items() if k not in ("yearly", "top_products", "top_customers")}
+    out["yearly"] = sorted(data["yearly"], key=lambda r: json.dumps(r, sort_keys=True))
+    for key in ("top_products", "top_customers"):
+        groups: dict[tuple, list[dict]] = {}
+        for r in data[key]:
+            groups.setdefault((r["yr"], r["country"]), []).append(r)
+        out[key] = {}
+        for group, rows in sorted(groups.items()):
+            revenues = [r["revenue"] for r in rows]
+            out[key][group] = [
+                (r["rk"], r["revenue"], json.dumps(r, sort_keys=True) if revenues.count(r["revenue"]) == 1 and r["rk"] < 10 else None)
+                for r in sorted(rows, key=lambda r: r["rk"])
+            ]
+    return out
+
+
+@pytest.mark.skipif(not PARQUET.exists(), reason="needs the local dataset (make data, or set DATA_DIR)")
+def test_rebuilt_dashboard_data_equals_the_committed_file_apart_from_row_order(tmp_path):
+    """Why not byte-identical: yearly has no ORDER BY and top_products has tied revenues, so DuckDB's row order changes between runs on the same
+    version. The values are stable. This rebuilds into a temp path (never docs/) and compares contents with the rows sorted."""
+    from build_data import build
+
+    rebuilt = tmp_path / "data.json"
+    rebuilt.write_text(json.dumps(build(PARQUET), separators=(",", ":"), default=str))
+    assert _normalised(json.loads(rebuilt.read_text())) == _normalised(DASHBOARD)
+    assert _normalised(DASHBOARD)["top_products"], "the comparison must not be empty"

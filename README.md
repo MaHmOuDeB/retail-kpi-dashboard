@@ -75,4 +75,6 @@ make test
 `make build` and `make export` read `data/` by default; `DATA_DIR=path make export` points them at another folder holding the two data files.
 `uv.lock` resolves packages as of 4 October 2025 (`exclude-newer` in `pyproject.toml`).
 
+Rebuilding `docs/data.json` gives the same values but not always the same row order: `yearly` has no `ORDER BY` and some `top_products` revenues tie, so DuckDB can list equal rows in either order between runs. The tests therefore compare a rebuild with the committed file after removing row and tie order (`tests/test_export.py`, needs the data).
+
 Data: Chen, D. (2012). Online Retail II. UCI Machine Learning Repository, CC BY 4.0.

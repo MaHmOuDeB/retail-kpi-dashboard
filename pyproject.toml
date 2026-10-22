@@ -19,7 +19,7 @@ dev = ["pytest>=8", "ruff>=0.5"]
 [tool.uv]
 package = false
 # Resolve packages as of this date, so reports/site/retail.json (which records the DuckDB version) is regenerated with the same stack.
-# docs/data.json is not byte-stable on any version: yearly and top_products come out of DuckDB in an unspecified order that varies between runs.
+# docs/data.json has the same values on every version but not always the same row order (tied ranks, unordered GROUP BY); a test compares contents.
 exclude-newer = "2025-10-04T00:00:00Z"
 
 [tool.ruff]
