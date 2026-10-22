@@ -121,7 +121,7 @@ function render() {
     ["Customers", fmt(y.customers), "Registered customers who ordered", ""],
     ["Average order value", "£" + fmt(ord ? rev / ord : 0), "Revenue per order", dAov],
     ["Repeat customers", fmt(y.repeat_rate * 100, 0) + "%", "More than one order in the period; longer periods read higher", ""],
-    ["Return rate", fmt(rev ? ret / rev * 100 : 0, 1) + "%", "Genuine returns / sales value (same-day reversals excluded)", dRet],
+    ["Return rate", fmt(rev ? ret / rev * 100 : 0, 1) + "%", "Genuine returns / sales value (orders cancelled within 24 hours excluded)", dRet],
   ];
   document.getElementById("kpis").innerHTML = kp.map(([l, v, n, dl]) => `<div class="card kpi"><div class="l">${l}</div><div class="v">${v}</div>${dl}<div class="n">${n}</div></div>`).join("");
   document.getElementById("t-month").textContent = "Monthly revenue: " + (state.country === "All" ? "all countries" : state.country);

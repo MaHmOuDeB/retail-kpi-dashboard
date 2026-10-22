@@ -19,7 +19,7 @@ def row(inv, code, qty, ts, price=2.0, cust=1.0, country="United Kingdom"):
     return (inv, code, "ITEM", qty, ts, price, cust, country)
 
 
-def test_same_day_reversal_is_removed_on_both_sides():
+def test_reversal_within_24_hours_is_removed_on_both_sides():
     con = run([row("A1", "10001", 100, "2011-01-18 10:00"), row("C2", "10001", -100, "2011-01-18 10:05"), row("A3", "10002", 1, "2011-01-19 09:00")])
     assert con.execute("SELECT COUNT(*) FROM returns").fetchone()[0] == 0
     assert [r[0] for r in con.execute("SELECT invoice FROM sales ORDER BY invoice").fetchall()] == ["A3"]

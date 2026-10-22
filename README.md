@@ -25,9 +25,7 @@ in Power BI Desktop on Windows. This version is a web page anyone can open, and 
 ## Data cleaning that changes the answer
 
 A cancellation that undoes an order line for the same customer, product and quantity within 24 hours is treated as an order
-that never happened, and both lines are removed. Without this rule, two orders (£77k in January 2011 and £168k on 9 December
-2011, each cancelled the same day) counted as revenue and again as returns, which made returns look as if they had grown by
-29% year on year (the cleaned figures grow by about 2%) and put one cancelled order at the top of the product and customer rankings. The rule is tested on synthetic invoices.
+that never happened, and both lines are removed. Without this rule, orders cancelled within 24 hours counted once as sales and again as returns, mostly one £77k order placed and cancelled on 18 January 2011, which made January-to-November returns look as if they had grown 29% instead of about 2%. The rule is tested on synthetic invoices.
 
 ## How it works
 
@@ -50,7 +48,7 @@ that never happened, and both lines are removed. Without this rule, two orders (
 | Customers | Distinct registered customers who ordered in the period |
 | Average order value | Revenue / orders |
 | Repeat customers | Share of customers with more than one order in the period |
-| Return rate | Value of cancellations that were not same-day reversals / sales value |
+| Return rate | Value of cancellations that were not reversals within 24 hours / sales value |
 | Year-on-year change | 2011 versus 2010 for January to November, the months both years have in full |
 
 ## Limits
@@ -66,11 +64,15 @@ that never happened, and both lines are removed. Without this rule, two orders (
 ## Reproduce
 
 ```bash
-make setup   # pip install -r requirements.txt
+make setup   # uv sync --locked (Python 3.12, versions pinned in uv.lock)
 make data    # downloads UCI Online Retail II (45 MB) and converts it to Parquet
 make build   # runs the SQL, rewrites docs/data.json
+make export  # writes reports/site/retail.json: monthly sales and returns before and after the 24-hour rule
 make serve   # http://localhost:8000
 make test
 ```
+
+`make build` and `make export` read `data/` by default; `DATA_DIR=path make export` points them at another folder holding the two data files.
+`uv.lock` resolves packages as of 4 October 2025 (`exclude-newer` in `pyproject.toml`).
 
 Data: Chen, D. (2012). Online Retail II. UCI Machine Learning Repository, CC BY 4.0.

@@ -3,13 +3,28 @@ name = "retail-kpi-dashboard"
 version = "1.0.0"
 description = "Interactive sales KPI dashboard on UCI Online Retail II: SQL (DuckDB) models behind a static web page"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "Mahmoud El Bergui" }]
+dependencies = [
+    "duckdb>=1.1",
+    "pandas>=2.1",
+    "pyarrow>=15",
+    "openpyxl>=3.1",
+]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[tool.uv]
+package = false
+# Resolve packages as of this date, so reports/site/retail.json (which records the DuckDB version) is regenerated with the same stack.
+# docs/data.json is not byte-stable on any version: yearly and top_products come out of DuckDB in an unspecified order that varies between runs.
+exclude-newer = "2025-10-04T00:00:00Z"
 
 [tool.ruff]
 line-length = 150
-target-version = "py39"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]

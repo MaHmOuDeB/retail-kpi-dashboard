@@ -1,7 +1,7 @@
 -- Clean the raw invoice lines into `sales` (what customers kept) and `returns` (genuine returns).
 -- A cancellation that reverses an order line for the same customer, product and quantity within 24 hours is
 -- treated as an order that never happened: both sides are removed. Without this, a single mis-keyed order of
--- 74,215 units (cancelled the same day) counts as £77k of revenue and £77k of returns.
+-- 74,215 units (cancelled within 24 hours) counts as £77k of revenue and £77k of returns.
 CREATE OR REPLACE TABLE raw AS SELECT * FROM read_parquet('data/online_retail_ii.parquet');
 
 CREATE OR REPLACE TABLE sales_all AS
